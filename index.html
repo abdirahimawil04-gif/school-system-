@@ -203,6 +203,14 @@
                 { id: 1, busNumber: 'BUS-01', route: 'Route A - Downtown', driverName: 'Robert Smith', driverPhone: '+12345678920', capacity: 40 },
                 { id: 2, busNumber: 'BUS-02', route: 'Route B - Westside', driverName: 'David Johnson', driverPhone: '+12345678921', capacity: 35 }
             ],
+            staff: [
+                { id: 301, name: 'Ahmed Hassan', role: 'Accountant', email: 'ahmed@edunexus.com', phone: '+12345678930', salary: 40000, joinDate: '2024-01-15', status: 'active', shift: 'Day', emergencyContact: '+12345678931', address: '12 Finance St' },
+                { id: 302, name: 'Fatima Ali', role: 'Cleaner', email: 'fatima@edunexus.com', phone: '+12345678932', salary: 15000, joinDate: '2024-02-01', status: 'active', shift: 'Morning', emergencyContact: '+12345678933' }
+            ],
+            expenses: [
+                { id: 1, description: 'Electricity Bill - March', category: 'Utilities', amount: 12000, date: '2025-03-15', paymentMethod: 'Bank Transfer', receiptNo: 'EXP-001', notes: 'Monthly electricity', createdBy: 'Super Admin', createdAt: '2025-03-15' },
+                { id: 2, description: 'Office Supplies', category: 'Supplies', amount: 3500, date: '2025-03-20', paymentMethod: 'Cash', receiptNo: 'EXP-002', notes: 'Papers, pens, folders', createdBy: 'Super Admin', createdAt: '2025-03-20' }
+            ],
             settings: { schoolName: 'EduNexus International', shortName: 'EduNexus', schoolAddress: '123 Education Lane, Learning City', schoolPhone: '+1 (555) 123-4567', schoolEmail: 'info@edunexus.edu', schoolWebsite: 'https://www.edunexus.edu', academicYear: '2024-2025', sessionStart: '2024-04-01', sessionEnd: '2025-03-31', weekOff: 'Sunday', currency: 'USD', darkMode: false }
         };
     }
@@ -233,6 +241,8 @@
                     dbConn.close();
                     if (data) {
                         if (!data.buses) data.buses = [];
+                        if (!data.staff) data.staff = [];
+                        if (!data.expenses) data.expenses = [];
                         if (!data.settings) data.settings = {};
                         if (!data.settings.shortName) data.settings.shortName = 'School';
                         if (!data.settings.schoolAddress) data.settings.schoolAddress = '';
@@ -524,6 +534,44 @@
             db.students.forEach(s => { if (s.busId === id) s.busId = null; });
             saveDB();
         },
+        getStaff() { return [...(db.staff || [])]; },
+        addStaff(data) {
+            if (!data.name || !data.name.trim()) throw new Error('Staff name is required');
+            if (!data.role || !data.role.trim()) throw new Error('Staff role is required');
+            const newStaff = { ...data, id: genId(), status: 'active', joinDate: new Date().toISOString().slice(0,10), name: data.name.trim() };
+            db.staff.push(newStaff);
+            saveDB();
+            return newStaff;
+        },
+        updateStaff(id, data) {
+            const idx = (db.staff || []).findIndex(s => s.id === id);
+            if (idx === -1) throw new Error('Staff not found');
+            db.staff[idx] = { ...db.staff[idx], ...data };
+            saveDB();
+        },
+        deleteStaff(id) {
+            db.staff = (db.staff || []).filter(s => s.id !== id);
+            saveDB();
+        },
+        getExpenses() { return [...(db.expenses || [])]; },
+        addExpense(data) {
+            if (!data.description || !data.description.trim()) throw new Error('Description is required');
+            if (!data.amount || data.amount <= 0) throw new Error('Amount must be greater than 0');
+            const newExpense = { ...data, id: genId(), createdAt: new Date().toISOString().slice(0,10), createdBy: currentUser?.name || 'Admin' };
+            db.expenses.push(newExpense);
+            saveDB();
+            return newExpense;
+        },
+        updateExpense(id, data) {
+            const idx = (db.expenses || []).findIndex(e => e.id === id);
+            if (idx === -1) throw new Error('Expense not found');
+            db.expenses[idx] = { ...db.expenses[idx], ...data };
+            saveDB();
+        },
+        deleteExpense(id) {
+            db.expenses = (db.expenses || []).filter(e => e.id !== id);
+            saveDB();
+        },
         getSettings() { return { ...db.settings }; },
         updateSettings(settings) {
             db.settings = { ...db.settings, ...settings };
@@ -650,8 +698,8 @@
     let receiptModal = { open: false, transaction: null, studentName: '' };
     let notification = null;
     let notificationTimer = null;
-    let filters = { studentSearch: '', teacherSearch: '', attendanceClass: 'all', attendanceSearch: '', examClass: 'all', examSearch: '', feeClass: 'all', feeSearch: '', classStudentSearch: '' };
-    let pagination = { students: 1, teachers: 1, fees: 1, examsList: 1 };
+    let filters = { studentSearch: '', teacherSearch: '', staffSearch: '', expenseSearch: '', attendanceClass: 'all', attendanceSearch: '', examClass: 'all', examSearch: '', feeClass: 'all', feeSearch: '', classStudentSearch: '' };
+    let pagination = { students: 1, teachers: 1, fees: 1, examsList: 1, staff: 1, expenses: 1 };
     let selectedClassId = null;
     let chartInstances = [];
     const FEE_TYPES = [
@@ -766,8 +814,10 @@
                     subject: document.getElementById('t_subject').value,
                     qualification: document.getElementById('t_qualification').value,
                     phone: document.getElementById('t_phone').value,
-                    salary: parseFloat(document.getElementById('t_salary').value) || 0
+                    salary: parseFloat(document.getElementById('t_salary').value) || 0,
+                    photo: window._studentPhotoData || modal.data?.photo || null
                 };
+                window._studentPhotoData = null;
                 if (modal.data) {
                     api.updateTeacher(modal.data.id, form);
                     showNotification('Teacher updated successfully');
@@ -840,8 +890,44 @@
                 };
                 if (!form.busNumber) throw new Error('Bus number is required');
                 if (!form.route) throw new Error('Route is required');
-                api.addBus(form);
-                showNotification('Bus added successfully');
+                if (modal.data) api.updateBus(modal.data.id, form);
+                else api.addBus(form);
+                showNotification('Bus saved successfully');
+                closeModal();
+            } else if (t === 'staff') {
+                const form = {
+                    name: document.getElementById('st_name').value,
+                    role: document.getElementById('st_role').value,
+                    email: document.getElementById('st_email').value,
+                    phone: document.getElementById('st_phone').value,
+                    salary: parseFloat(document.getElementById('st_salary').value) || 0,
+                    shift: document.getElementById('st_shift').value,
+                    emergencyContact: document.getElementById('st_emergency').value,
+                    address: document.getElementById('st_address').value,
+                    photo: window._studentPhotoData || modal.data?.photo || null
+                };
+                if (!form.name) throw new Error('Staff name is required');
+                if (!form.role) throw new Error('Staff role is required');
+                if (modal.data) api.updateStaff(modal.data.id, form);
+                else api.addStaff(form);
+                window._studentPhotoData = null;
+                showNotification('Staff saved successfully');
+                closeModal();
+            } else if (t === 'expense') {
+                const form = {
+                    description: document.getElementById('ex_description').value,
+                    category: document.getElementById('ex_category').value,
+                    amount: parseFloat(document.getElementById('ex_amount').value) || 0,
+                    date: document.getElementById('ex_date').value,
+                    paymentMethod: document.getElementById('ex_paymentMethod').value,
+                    receiptNo: document.getElementById('ex_receiptNo').value,
+                    notes: document.getElementById('ex_notes').value
+                };
+                if (!form.description) throw new Error('Description is required');
+                if (!form.amount || form.amount <= 0) throw new Error('Amount must be greater than 0');
+                if (modal.data) api.updateExpense(modal.data.id, form);
+                else api.addExpense(form);
+                showNotification('Expense saved successfully');
                 closeModal();
             } else if (t === 'result') {
                 const form = {
@@ -913,6 +999,8 @@
                 else if (type === 'subject') api.deleteSubject(id);
                 else if (type === 'fee') api.deleteFee(id);
                 else if (type === 'bus') api.deleteBus(id);
+                else if (type === 'staff') api.deleteStaff(id);
+                else if (type === 'expense') api.deleteExpense(id);
                 const label = type === 'subject' ? 'Subject' : type.charAt(0).toUpperCase() + type.slice(1);
                 showNotification(`${label} deleted successfully`);
                 render();
@@ -1179,6 +1267,8 @@
             { id: 'attendance', label: 'Attendance', icon: 'calendar-check', show: isAdmin || isTeacher },
             { id: 'exams', label: 'Exams & Results', icon: 'file-alt', show: true },
             { id: 'fees', label: 'Fees', icon: 'credit-card', show: isAdmin || isStudent },
+            { id: 'staff', label: 'Staff', icon: 'users-cog', show: isAdmin },
+            { id: 'expenses', label: 'Expenses', icon: 'wallet', show: isAdmin },
             { id: 'buses', label: 'Buses', icon: 'bus', show: isAdmin },
             { id: 'settings', label: 'Settings', icon: 'cog', show: isAdmin }
         ].filter(i => i.show);
@@ -1202,7 +1292,7 @@
                                 <div>
                                     <p class="text-indigo-200 text-sm font-medium">${todayStr}</p>
                                     <h1 class="text-2xl md:text-3xl font-bold mt-1">Welcome back, ${escapeHtml(currentUser.name)}</h1>
-                                    <p class="text-indigo-200 mt-1">${stats.students} students · ${teacherCount} teachers · ${classCount} classes</p>
+                                    <p class="text-indigo-200 mt-1">${stats.students} students · ${teacherCount} teachers · ${api.getStaff().length} staff · ${classCount} classes</p>
                                 </div>
                                 <div class="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2">
                                     <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-bold">
@@ -1662,11 +1752,9 @@
                                 <div class="h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
                                 <div class="p-5">
                                     <div class="flex items-start justify-between mb-4">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white shadow-sm">
-                                                ${initials}
-                                            </div>
-                                            <div>
+                                    <div class="flex items-center gap-3">
+                                        ${renderAvatar(t, 'w-12 h-12')}
+                                        <div>
                                                 <h3 class="font-semibold text-gray-800 dark:text-gray-200">${escapeHtml(t.name)}</h3>
                                                 <p class="text-xs text-gray-400">${escapeHtml(t.email || '-')}</p>
                                             </div>
@@ -2990,6 +3078,287 @@
                     </div>`}
                 </div>`;
         }
+        else if (activeTab === 'staff' && isAdmin) {
+            let allStaff = api.getStaff();
+            if (filters.staffSearch) allStaff = allStaff.filter(s => multiMatch(s, ['name', 'role', 'email', 'phone'], filters.staffSearch));
+            const totalStaff = allStaff.length;
+            const totalPages = Math.ceil(totalStaff / PAGE_SIZE);
+            if (pagination.staff > totalPages && totalPages > 0) pagination.staff = totalPages;
+            const startIdx = (pagination.staff - 1) * PAGE_SIZE;
+            const pageItems = allStaff.slice(startIdx, startIdx + PAGE_SIZE);
+            const activeStaff = allStaff.filter(s => s.status === 'active').length;
+            const avgSalary = allStaff.length ? Math.round(allStaff.reduce((s, st) => s + (st.salary || 0), 0) / allStaff.length) : 0;
+            content = `
+                <div class="space-y-6">
+                    <div class="flex flex-wrap justify-between items-center gap-3">
+                        <div>
+                            <h2 class="text-2xl font-bold dark:text-white">Staff Management</h2>
+                            <p class="text-sm text-gray-500">${filters.staffSearch ? pageItems.length + ' of ' + totalStaff + ' staff' : totalStaff + ' staff member' + (totalStaff !== 1 ? 's' : '')} · ${activeStaff} active · ${curSym()}${avgSalary.toLocaleString()} avg salary</p>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <div class="relative">
+                                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
+                                <input type="text" id="staffSearchInput" value="${escapeHtml(filters.staffSearch)}" placeholder="Search name or role..." class="border rounded-lg pl-9 pr-8 py-2 text-sm w-56 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none bg-white dark:bg-gray-800 dark:border-gray-600" oninput="var v=this.value;clearTimeout(this._db);this._db=setTimeout(function(){filters.staffSearch=v;pagination.staff=1;render()},100)">
+                                ${filters.staffSearch ? '<button onclick="filters.staffSearch=\'\';pagination.staff=1;render()" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"><i class="fas fa-times"></i></button>' : ''}
+                            </div>
+                            <button onclick="openModal('staff')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition shadow-sm flex items-center gap-1.5">
+                                <i class="fas fa-plus text-xs"></i> Add Staff
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl p-5 text-white shadow-lg">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-indigo-200 text-xs font-medium uppercase tracking-wider">Total Staff</p>
+                                    <p class="text-3xl font-bold mt-1">${totalStaff}</p>
+                                </div>
+                                <div class="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                    <i class="fas fa-users-cog text-lg"></i>
+                                </div>
+                            </div>
+                            <div class="mt-2 flex items-center gap-1 text-indigo-200 text-xs"><i class="fas fa-arrow-up"></i><span>All time</span></div>
+                        </div>
+                        <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl p-5 text-white shadow-lg">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-emerald-200 text-xs font-medium uppercase tracking-wider">Active</p>
+                                    <p class="text-3xl font-bold mt-1">${activeStaff}</p>
+                                </div>
+                                <div class="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                    <i class="fas fa-check-circle text-lg"></i>
+                                </div>
+                            </div>
+                            <div class="mt-2 flex items-center gap-1 text-emerald-200 text-xs"><span>${totalStaff ? Math.round(activeStaff/totalStaff*100) : 0}% of total</span></div>
+                        </div>
+                        <div class="bg-gradient-to-br from-red-500 to-red-700 rounded-xl p-5 text-white shadow-lg">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-red-200 text-xs font-medium uppercase tracking-wider">Inactive</p>
+                                    <p class="text-3xl font-bold mt-1">${allStaff.filter(s => s.status !== 'active').length}</p>
+                                </div>
+                                <div class="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                    <i class="fas fa-user-slash text-lg"></i>
+                                </div>
+                            </div>
+                            <div class="mt-2 flex items-center gap-1 text-red-200 text-xs"><span>${totalStaff ? Math.round(allStaff.filter(s=>s.status!=='active').length/totalStaff*100) : 0}% of total</span></div>
+                        </div>
+                        <div class="bg-gradient-to-br from-purple-500 to-purple-700 rounded-xl p-5 text-white shadow-lg">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-purple-200 text-xs font-medium uppercase tracking-wider">Avg Salary</p>
+                                    <p class="text-3xl font-bold mt-1">${curSym()}${avgSalary.toLocaleString()}</p>
+                                </div>
+                                <div class="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                    <i class="fas fa-money-bill-wave text-lg"></i>
+                                </div>
+                            </div>
+                            <div class="mt-2 flex items-center gap-1 text-purple-200 text-xs"><span>Monthly average</span></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        ${pageItems.map(s => {
+                            const statusColor = s.status === 'active' ? 'bg-emerald-500' : 'bg-red-500';
+                            const statusText = s.status === 'active' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-700';
+                            const shiftBadge = s.shift ? (s.shift === 'Day' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : s.shift === 'Morning' ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300' : s.shift === 'Evening' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300') : '';
+                            return `
+                            <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm hover:shadow-md transition overflow-hidden group">
+                                <div class="h-2 bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500"></div>
+                                <div class="p-5">
+                                    <div class="flex items-start justify-between mb-4">
+                                        <div class="flex items-center gap-3">
+                                            ${renderAvatar(s, 'w-12 h-12')}
+                                            <div>
+                                                <h3 class="font-semibold text-gray-800 dark:text-gray-200">${escapeHtml(s.name)}</h3>
+                                                <p class="text-xs text-gray-400">${escapeHtml(s.email || '-')}</p>
+                                            </div>
+                                        </div>
+                                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${statusText} flex-shrink-0">
+                                            <span class="w-1.5 h-1.5 rounded-full ${statusColor}"></span>
+                                            ${escapeHtml(s.status || 'active')}
+                                        </span>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-3 mb-4">
+                                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
+                                            <p class="text-xs text-gray-400">Role</p>
+                                            <p class="text-sm font-semibold dark:text-white mt-0.5 truncate">${escapeHtml(s.role || '-')}</p>
+                                        </div>
+                                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
+                                            <p class="text-xs text-gray-400">Shift</p>
+                                            <p class="text-sm font-semibold mt-0.5 ${s.shift ? '' : 'dark:text-white'}"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${shiftBadge || 'border-gray-200 dark:border-gray-600 text-gray-500'}">${escapeHtml(s.shift || '-')}</span></p>
+                                        </div>
+                                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3 text-center">
+                                            <p class="text-xs text-gray-400">Salary</p>
+                                            <p class="text-sm font-semibold dark:text-white mt-0.5">${curSym()}${(s.salary || 0).toLocaleString()}</p>
+                                        </div>
+                                    </div>
+                                    <div class="space-y-1.5 text-xs text-gray-500 dark:text-gray-400 mb-4">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fas fa-briefcase w-4 text-cyan-400"></i>
+                                            <span>${escapeHtml(s.role || '-')}</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <i class="fas fa-phone w-4 text-cyan-400"></i>
+                                            <span>${escapeHtml(s.phone || '-')}</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <i class="fas fa-calendar w-4 text-cyan-400"></i>
+                                            <span>Joined ${escapeHtml(s.joinDate || '-')}</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <i class="fas fa-exclamation-triangle w-4 text-cyan-400"></i>
+                                            <span>Emergency: ${escapeHtml(s.emergencyContact || '-')}</span>
+                                        </div>
+                                    </div>
+                                    <div class="pt-3 border-t dark:border-gray-700 flex gap-2">
+                                        <button data-cid="${cacheData(s)}" onclick="openCached('staff', this)" class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-sm transition">
+                                            <i class="fas fa-edit text-xs"></i> Edit
+                                        </button>
+                                        <button onclick="deleteEntity('staff', ${s.id})" class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 text-sm transition">
+                                            <i class="fas fa-trash text-xs"></i> Delete
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>`;}).join('')}
+                    </div>
+                    ${pageItems.length === 0 ? '<div class="text-center py-16 text-gray-400 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700"><i class="fas fa-users-cog text-5xl mb-4 opacity-50"></i><p class="text-lg font-medium">No staff found</p><p class="text-sm">Add a staff member or adjust your search</p></div>' : ''}
+                    ${renderPagination(pagination.staff, totalStaff, 'staff')}
+                </div>`;
+        }
+        else if (activeTab === 'expenses' && isAdmin) {
+            let allExpenses = api.getExpenses();
+            if (filters.expenseSearch) allExpenses = allExpenses.filter(e => multiMatch(e, ['description', 'category', 'receiptNo', 'notes'], filters.expenseSearch));
+            const totalExpenses = allExpenses.length;
+            const totalAmount = allExpenses.reduce((s, e) => s + (e.amount || 0), 0);
+            const totalPages = Math.ceil(totalExpenses / PAGE_SIZE);
+            if (pagination.expenses > totalPages && totalPages > 0) pagination.expenses = totalPages;
+            const startIdx = (pagination.expenses - 1) * PAGE_SIZE;
+            const pageItems = allExpenses.slice(startIdx, startIdx + PAGE_SIZE);
+            const categories = ['Utilities', 'Rent', 'Supplies', 'Maintenance', 'Salaries', 'Transport', 'Food', 'Other'];
+            const categoryCounts = {};
+            categories.forEach(c => categoryCounts[c] = allExpenses.filter(e => e.category === c).length);
+            const topCategory = categories.reduce((a, b) => (categoryCounts[a] || 0) >= (categoryCounts[b] || 0) ? a : b, categories[0]);
+            content = `
+                <div class="space-y-6">
+                    <div class="flex flex-wrap justify-between items-center gap-3">
+                        <div>
+                            <h2 class="text-2xl font-bold dark:text-white">Expenses</h2>
+                            <p class="text-sm text-gray-500">${totalExpenses} record${totalExpenses !== 1 ? 's' : ''} · ${curSym()}${totalAmount.toLocaleString()} total · Top: ${topCategory}</p>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <div class="relative">
+                                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
+                                <input type="text" id="expenseSearchInput" value="${escapeHtml(filters.expenseSearch)}" placeholder="Search description..." class="border rounded-lg pl-9 pr-8 py-2 text-sm w-56 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none bg-white dark:bg-gray-800 dark:border-gray-600" oninput="var v=this.value;clearTimeout(this._db);this._db=setTimeout(function(){filters.expenseSearch=v;pagination.expenses=1;render()},100)">
+                                ${filters.expenseSearch ? '<button onclick="filters.expenseSearch=\'\';pagination.expenses=1;render()" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"><i class="fas fa-times"></i></button>' : ''}
+                            </div>
+                            <button onclick="openModal('expense')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition shadow-sm flex items-center gap-1.5">
+                                <i class="fas fa-plus text-xs"></i> Add Expense
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl p-5 text-white shadow-lg">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-indigo-200 text-xs font-medium uppercase tracking-wider">Total Records</p>
+                                    <p class="text-3xl font-bold mt-1">${totalExpenses}</p>
+                                </div>
+                                <div class="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                    <i class="fas fa-receipt text-lg"></i>
+                                </div>
+                            </div>
+                            <div class="mt-2 flex items-center gap-1 text-indigo-200 text-xs"><span>All time</span></div>
+                        </div>
+                        <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl p-5 text-white shadow-lg">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-emerald-200 text-xs font-medium uppercase tracking-wider">Total Amount</p>
+                                    <p class="text-2xl font-bold mt-1">${curSym()}${totalAmount.toLocaleString()}</p>
+                                </div>
+                                <div class="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                    <i class="fas fa-money-bill-wave text-lg"></i>
+                                </div>
+                            </div>
+                            <div class="mt-2 flex items-center gap-1 text-emerald-200 text-xs"><span>Total spent</span></div>
+                        </div>
+                        <div class="bg-gradient-to-br from-purple-500 to-purple-700 rounded-xl p-5 text-white shadow-lg">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-purple-200 text-xs font-medium uppercase tracking-wider">Top Category</p>
+                                    <p class="text-2xl font-bold mt-1 truncate">${topCategory}</p>
+                                </div>
+                                <div class="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                    <i class="fas fa-tags text-lg"></i>
+                                </div>
+                            </div>
+                            <div class="mt-2 flex items-center gap-1 text-purple-200 text-xs"><span>${categoryCounts[topCategory] || 0} record${categoryCounts[topCategory] !== 1 ? 's' : ''}</span></div>
+                        </div>
+                        <div class="bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl p-5 text-white shadow-lg">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-amber-200 text-xs font-medium uppercase tracking-wider">Categories</p>
+                                    <p class="text-3xl font-bold mt-1">${categories.filter(c => categoryCounts[c] > 0).length}</p>
+                                </div>
+                                <div class="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                    <i class="fas fa-layer-group text-lg"></i>
+                                </div>
+                            </div>
+                            <div class="mt-2 flex items-center gap-1 text-amber-200 text-xs"><span>Of ${categories.length} total</span></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-50 dark:bg-gray-700">
+                                    <tr>
+                                        <th class="p-3 text-left font-semibold text-gray-600 dark:text-gray-300">Date</th>
+                                        <th class="p-3 text-left font-semibold text-gray-600 dark:text-gray-300">Description</th>
+                                        <th class="p-3 text-left font-semibold text-gray-600 dark:text-gray-300">Category</th>
+                                        <th class="p-3 text-right font-semibold text-gray-600 dark:text-gray-300">Amount</th>
+                                        <th class="p-3 text-left font-semibold text-gray-600 dark:text-gray-300 hidden md:table-cell">Payment</th>
+                                        <th class="p-3 text-left font-semibold text-gray-600 dark:text-gray-300 hidden lg:table-cell">Receipt</th>
+                                        <th class="p-3 text-left font-semibold text-gray-600 dark:text-gray-300 hidden lg:table-cell">Notes</th>
+                                        <th class="p-3 text-right font-semibold text-gray-600 dark:text-gray-300">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                    ${pageItems.map(e => {
+                                        const catColors = {
+                                            'Utilities': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700',
+                                            'Rent': 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-700',
+                                            'Supplies': 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-700',
+                                            'Maintenance': 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 border-orange-200 dark:border-orange-700',
+                                            'Salaries': 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700',
+                                            'Transport': 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300 border-cyan-200 dark:border-cyan-700',
+                                            'Food': 'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300 border-pink-200 dark:border-pink-700',
+                                            'Other': 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-600'
+                                        };
+                                        const catColor = catColors[e.category] || catColors['Other'];
+                                        return `<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
+                                        <td class="p-3 whitespace-nowrap text-xs text-gray-500">${escapeHtml(e.date || '-')}</td>
+                                        <td class="p-3 font-medium dark:text-white">${escapeHtml(e.description)}</td>
+                                        <td class="p-3"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${catColor}">${escapeHtml(e.category || 'Other')}</span></td>
+                                        <td class="p-3 text-right font-semibold dark:text-white whitespace-nowrap">${curSym()}${(e.amount || 0).toLocaleString()}</td>
+                                        <td class="p-3 hidden md:table-cell text-xs text-gray-500">${escapeHtml(e.paymentMethod || '-')}</td>
+                                        <td class="p-3 hidden lg:table-cell text-xs text-gray-500 font-mono">${escapeHtml(e.receiptNo || '-')}</td>
+                                        <td class="p-3 hidden lg:table-cell text-xs text-gray-500 max-w-[120px] truncate">${escapeHtml(e.notes || '-')}</td>
+                                        <td class="p-3 text-right whitespace-nowrap">
+                                            <button data-cid="${cacheData(e)}" onclick="openCached('expense', this)" class="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition" title="Edit"><i class="fas fa-edit text-xs"></i></button>
+                                            <button onclick="deleteEntity('expense', ${e.id})" class="p-1.5 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition" title="Delete"><i class="fas fa-trash text-xs"></i></button>
+                                        </td>
+                                    </tr>`;}).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        ${pageItems.length === 0 ? '<div class="text-center py-16 text-gray-400"><i class="fas fa-wallet text-5xl mb-4 opacity-50"></i><p class="text-lg font-medium">No expenses recorded</p><p class="text-sm">Add an expense to get started</p></div>' : ''}
+                        ${renderPagination(pagination.expenses, totalExpenses, 'expenses')}
+                    </div>
+                </div>`;
+        }
         else if (activeTab === 'settings' && isAdmin) {
             content = `
                 <div class="max-w-3xl mx-auto space-y-6">
@@ -3397,6 +3766,16 @@
                     <i class="fas fa-save mr-1"></i> ${d ? 'Update Student' : 'Add Student'}
                 </button>`;
             if (t === 'teacher') return `
+                <div class="flex items-center gap-4 mb-3">
+                    <div id="s_photo_preview" class="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-indigo-400 transition" onclick="document.getElementById('s_photo_input').click()">
+                        ${d?.photo ? `<img src="${escapeHtml(d.photo)}" class="w-full h-full object-cover">` : '<i class="fas fa-camera text-gray-400 text-xl"></i>'}
+                    </div>
+                    <div class="text-xs text-gray-400">
+                        <p class="font-medium text-gray-600 dark:text-gray-300">Teacher Photo</p>
+                        <p>Click to upload (optional)</p>
+                        <input type="file" id="s_photo_input" accept="image/*" class="hidden" onchange="previewStudentPhoto(this)">
+                    </div>
+                </div>
                 ${d ? '' : '<div class="text-xs text-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-2.5 mb-2"><i class="fas fa-info-circle mr-1"></i>A user account will be created automatically for login</div>'}
                 <input id="t_name" placeholder="Full Name *" value="${escapeHtml(d?.name||'')}" class="w-full border rounded-lg p-2 text-sm">
                 <input id="t_email" placeholder="Email" value="${escapeHtml(d?.email||'')}" class="w-full border rounded-lg p-2 text-sm">
@@ -3485,6 +3864,111 @@
                 </div>
                 <button onclick="saveModal()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-sm transition">
                     <i class="fas fa-save mr-1"></i> Add Fee Record
+                </button>`;
+            if (t === 'staff') return `
+                <div class="flex items-center gap-4 mb-3">
+                    <div id="s_photo_preview" class="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-indigo-400 transition" onclick="document.getElementById('s_photo_input').click()">
+                        ${d?.photo ? `<img src="${escapeHtml(d.photo)}" class="w-full h-full object-cover">` : '<i class="fas fa-camera text-gray-400 text-xl"></i>'}
+                    </div>
+                    <div class="text-xs text-gray-400">
+                        <p class="font-medium text-gray-600 dark:text-gray-300">Staff Photo</p>
+                        <p>Click to upload (optional)</p>
+                        <input type="file" id="s_photo_input" accept="image/*" class="hidden" onchange="previewStudentPhoto(this)">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs font-medium text-gray-500 dark:text-gray-400 block mb-1">Full Name *</label>
+                        <input id="st_name" value="${escapeHtml(d?.name||'')}" class="w-full border dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="Enter full name">
+                    </div>
+                    <div>
+                        <label class="text-xs font-medium text-gray-500 dark:text-gray-400 block mb-1">Role *</label>
+                        <input id="st_role" value="${escapeHtml(d?.role||'')}" class="w-full border dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="e.g. Accountant, Cleaner">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs font-medium text-gray-500 dark:text-gray-400 block mb-1">Email</label>
+                        <input id="st_email" type="email" value="${escapeHtml(d?.email||'')}" class="w-full border dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="staff@example.com">
+                    </div>
+                    <div>
+                        <label class="text-xs font-medium text-gray-500 dark:text-gray-400 block mb-1">Phone</label>
+                        <input id="st_phone" value="${escapeHtml(d?.phone||'')}" class="w-full border dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="+1 234 567 890">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs font-medium text-gray-500 dark:text-gray-400 block mb-1">Salary</label>
+                        <input id="st_salary" type="number" value="${d?.salary||''}" class="w-full border dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="Monthly salary">
+                    </div>
+                    <div>
+                        <label class="text-xs font-medium text-gray-500 dark:text-gray-400 block mb-1">Shift</label>
+                        <select id="st_shift" class="w-full border dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-400 outline-none">
+                            <option value="Day" ${d?.shift==='Day'?'selected':''}>Day</option>
+                            <option value="Morning" ${d?.shift==='Morning'?'selected':''}>Morning</option>
+                            <option value="Evening" ${d?.shift==='Evening'?'selected':''}>Evening</option>
+                            <option value="Night" ${d?.shift==='Night'?'selected':''}>Night</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs font-medium text-gray-500 dark:text-gray-400 block mb-1">Emergency Contact</label>
+                    <input id="st_emergency" value="${escapeHtml(d?.emergencyContact||'')}" class="w-full border dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="Emergency contact number">
+                </div>
+                <div>
+                    <label class="text-xs font-medium text-gray-500 dark:text-gray-400 block mb-1">Address</label>
+                    <textarea id="st_address" rows="2" class="w-full border dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="Full address">${escapeHtml(d?.address||'')}</textarea>
+                </div>
+                <button onclick="saveModal()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-sm font-medium transition shadow-sm">
+                    <i class="fas fa-save mr-1"></i> ${d ? 'Update Staff' : 'Add Staff'}
+                </button>`;
+            if (t === 'expense') return `
+                <div>
+                    <label class="text-xs font-medium text-gray-500 dark:text-gray-400 block mb-1">Description *</label>
+                    <input id="ex_description" value="${escapeHtml(d?.description||'')}" class="w-full border dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="Expense description">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs font-medium text-gray-500 dark:text-gray-400 block mb-1">Category *</label>
+                        <select id="ex_category" class="w-full border dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-400 outline-none">
+                            <option value="Utilities" ${d?.category==='Utilities'?'selected':''}>Utilities</option>
+                            <option value="Rent" ${d?.category==='Rent'?'selected':''}>Rent</option>
+                            <option value="Supplies" ${d?.category==='Supplies'?'selected':''}>Supplies</option>
+                            <option value="Maintenance" ${d?.category==='Maintenance'?'selected':''}>Maintenance</option>
+                            <option value="Salaries" ${d?.category==='Salaries'?'selected':''}>Salaries</option>
+                            <option value="Transport" ${d?.category==='Transport'?'selected':''}>Transport</option>
+                            <option value="Food" ${d?.category==='Food'?'selected':''}>Food</option>
+                            <option value="Other" ${d?.category==='Other'?'selected':''}>Other</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs font-medium text-gray-500 dark:text-gray-400 block mb-1">Amount *</label>
+                        <input id="ex_amount" type="number" value="${d?.amount||''}" class="w-full border dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs font-medium text-gray-500 dark:text-gray-400 block mb-1">Date</label>
+                        <input type="date" id="ex_date" value="${escapeHtml(d?.date||'')}" class="w-full border dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-400 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-xs font-medium text-gray-500 dark:text-gray-400 block mb-1">Payment Method</label>
+                        <input id="ex_paymentMethod" value="${escapeHtml(d?.paymentMethod||'')}" class="w-full border dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="Cash, Bank, etc.">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs font-medium text-gray-500 dark:text-gray-400 block mb-1">Receipt No</label>
+                        <input id="ex_receiptNo" value="${escapeHtml(d?.receiptNo||'')}" class="w-full border dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="e.g. EXP-001">
+                    </div>
+                    <div></div>
+                </div>
+                <div>
+                    <label class="text-xs font-medium text-gray-500 dark:text-gray-400 block mb-1">Notes</label>
+                    <textarea id="ex_notes" rows="2" class="w-full border dark:border-gray-600 rounded-lg p-2.5 text-sm bg-white dark:bg-gray-800 focus:ring-2 focus:ring-indigo-400 outline-none" placeholder="Optional notes">${escapeHtml(d?.notes||'')}</textarea>
+                </div>
+                <button onclick="saveModal()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg text-sm font-medium transition shadow-sm">
+                    <i class="fas fa-save mr-1"></i> ${d ? 'Update Expense' : 'Add Expense'}
                 </button>`;
             if (t === 'bus') return `
                 <div>
