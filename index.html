@@ -114,6 +114,18 @@
     const CURRENCY_MAP = { USD: '$', EUR: '€', GBP: '£', INR: '₹', PKR: '₨', BDT: '৳', NGN: '₦', KES: 'KSh' };
     function curSym() { return CURRENCY_MAP[db.settings.currency] || '$'; }
 
+    // Render student avatar (photo or initials)
+    function renderAvatar(student, sizeClass, extraClass) {
+        const size = sizeClass || 'w-9 h-9';
+        const cls = extraClass || '';
+        if (student && student.photo) {
+            return `<div class="${size} rounded-full flex-shrink-0 overflow-hidden ${cls}"><img src="${escapeHtml(student.photo)}" alt="" class="w-full h-full object-cover"></div>`;
+        }
+        const name = student ? student.name : '?';
+        const initials = escapeHtml(name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase());
+        return `<div class="${size} rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-sm font-bold text-white shadow-sm flex-shrink-0 ${cls}">${initials}</div>`;
+    }
+
     // Data cache to prevent XSS from JSON.stringify in inline onclick attributes
     let _dataCacheId = 0;
     const _dataCache = {};
@@ -125,6 +137,19 @@
     function openCached(type, el) {
         const key = parseInt(el.dataset.cid);
         openModal(type, key ? _dataCache[key] : null, el.dataset.cb ? window[el.dataset.cb] : null);
+    }
+
+    // Student photo preview
+    function previewStudentPhoto(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const preview = document.getElementById('s_photo_preview');
+            if (preview) preview.innerHTML = '<img src="' + escapeHtml(e.target.result) + '" class="w-full h-full object-cover">';
+            window._studentPhotoData = e.target.result;
+        };
+        reader.readAsDataURL(file);
     }
 
     // Safe confirm using a custom modal
@@ -701,7 +726,7 @@
         notification = null; notificationTimer = null; render();
     }
 
-    function openModal(type, data = null, callback = null) { modal = { open: true, type, data: data ? { ...data } : null, callback }; render(); }
+    function openModal(type, data = null, callback = null) { modal = { open: true, type, data: data ? { ...data } : null, callback }; window._studentPhotoData = null; render(); }
     function closeModal() { modal.open = false; render(); }
     function showReceipt(transaction, studentName) { receiptModal = { open: true, transaction, studentName }; render(); }
     function showReceiptFromFee(receiptNo, amount, date, method, studentName) {
@@ -726,10 +751,12 @@
                     parentName: document.getElementById('s_parentName').value,
                     parentPhone: document.getElementById('s_parentPhone').value,
                     busId: parseInt(document.getElementById('s_busId').value) || null,
-                    address: document.getElementById('s_address').value
+                    address: document.getElementById('s_address').value,
+                    photo: window._studentPhotoData || modal.data?.photo || null
                 };
                 if (modal.data) api.updateStudent(modal.data.id, form);
                 else api.addStudent(form);
+                window._studentPhotoData = null;
                 showNotification('Student saved successfully');
                 closeModal();
             } else if (t === 'teacher') {
@@ -1364,9 +1391,7 @@
                             <div class="space-y-2">
                                 ${recentStudents.length > 0 ? recentStudents.map(s => `
                                 <div class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
-                                    <div class="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-                                        ${escapeHtml((s.name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase())}
-                                    </div>
+                                    ${renderAvatar(s, 'w-9 h-9')}
                                     <div class="min-w-0 flex-1">
                                         <p class="text-sm font-medium dark:text-white truncate">${escapeHtml(s.name)}</p>
                                         <p class="text-[11px] text-gray-400">${escapeHtml(s.rollNo)} · ${escapeHtml(classes.find(c => c.id === s.classId)?.name || '-')} ${escapeHtml(classes.find(c => c.id === s.classId)?.section || '')}</p>
@@ -1496,9 +1521,7 @@
                                 <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
                                     <td class="p-3">
                                         <div class="flex items-center gap-3">
-                                            <div class="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-sm font-bold text-white shadow-sm flex-shrink-0">
-                                                ${escapeHtml(s.name.charAt(0).toUpperCase())}${escapeHtml(s.name.split(' ')[1]?.charAt(0).toUpperCase() || '')}
-                                            </div>
+                                            ${renderAvatar(s, 'w-9 h-9')}
                                             <div>
                                                 <p class="font-medium text-gray-800 dark:text-gray-200">${escapeHtml(s.name)}</p>
                                                 <p class="text-xs text-gray-400">${escapeHtml(s.email || '-')}</p>
@@ -1789,9 +1812,7 @@
                                                     <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
                                                         <td class="p-3">
                                                             <div class="flex items-center gap-2">
-                                                                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-                                                                    ${escapeHtml((s.name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase())}
-                                                                </div>
+                                                                ${renderAvatar(s, 'w-8 h-8')}
                                                                 <span class="font-medium dark:text-white">${escapeHtml(s.name)}</span>
                                                             </div>
                                                         </td>
@@ -2176,9 +2197,7 @@
                                                 return `
                                                 <div class="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/30 text-xs">
                                                     <div class="flex items-center gap-2 min-w-0">
-                                                        <div class="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-[9px] font-bold text-white flex-shrink-0">
-                                                            ${escapeHtml((st.name || '?').charAt(0).toUpperCase())}
-                                                        </div>
+                                                        ${renderAvatar(st, 'w-6 h-6')}
                                                         <span class="font-medium dark:text-white truncate">${escapeHtml(st.name)}</span>
                                                     </div>
                                                     <div class="flex items-center gap-2 flex-shrink-0">
@@ -2367,9 +2386,7 @@
                                     <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition border-l-4 ${borderColor}">
                                         <td class="p-3">
                                             <div class="flex items-center gap-2">
-                                                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-                                                    ${escapeHtml(s.name.charAt(0).toUpperCase())}${escapeHtml(s.name.split(' ')[1]?.charAt(0).toUpperCase() || '')}
-                                                </div>
+                                                ${renderAvatar(s, 'w-8 h-8')}
                                                 <p class="font-medium dark:text-white">${escapeHtml(s.name)}</p>
                                             </div>
                                         </td>
@@ -2616,9 +2633,7 @@
                                                             const pct = r.percentage || 0;
                                                             return `<div class="flex justify-between items-center py-2 border-b dark:border-gray-700 last:border-0 text-sm">
                                                                 <div class="min-w-0 flex items-center gap-2">
-                                                                    <div class="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">
-                                                                        ${escapeHtml((st?.name || '?').charAt(0).toUpperCase())}
-                                                                    </div>
+                                                                    ${renderAvatar(st, 'w-6 h-6')}
                                                                     <div>
                                                                         <span class="font-medium dark:text-white">${escapeHtml(st?.name || 'Unknown')}</span>
                                                                         <span class="text-gray-400 text-xs ml-1">${escapeHtml(sub?.name || '')}</span>
@@ -2665,9 +2680,7 @@
                                     return `<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
                                         <td class="p-3">
                                             <div class="flex items-center gap-2">
-                                                <div class="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">
-                                                    ${escapeHtml((st?.name || '?').charAt(0).toUpperCase())}
-                                                </div>
+                                                ${renderAvatar(st, 'w-7 h-7')}
                                                 <span class="font-medium dark:text-white">${escapeHtml(st?.name || 'Unknown')}</span>
                                             </div>
                                         </td>
@@ -2789,6 +2802,7 @@
                     <div class="space-y-3">
                         ${renderPagination(pagination.fees, totalFeeItems, 'fees')}
                         ${filteredFees.map(function(fee) {
+                            const feeStudent = students.find(st => st.id === fee.studentId);
                             const stName = getStudentName(fee.studentId);
                             const stClass = getStudentClass(fee.studentId);
                             const totalAmt = fee.totalAmount || (fee.breakdown ? fee.breakdown.reduce((s,b) => s+(b.amount||0), 0) : 0);
@@ -2806,9 +2820,7 @@
                                 <div class="p-4">
                                     <div class="flex flex-wrap justify-between items-start gap-3">
                                         <div class="flex items-center gap-3 min-w-0">
-                                            <div class="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm font-bold text-white flex-shrink-0 shadow-sm">
-                                                ${escapeHtml(getInitials(stName))}
-                                            </div>
+                                            ${renderAvatar(feeStudent, 'w-11 h-11')}
                                             <div class="min-w-0">
                                                 <p class="font-semibold text-gray-900 dark:text-white truncate">${escapeHtml(stName)}</p>
                                                 <div class="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
@@ -3324,6 +3336,16 @@
             const t = modal.type;
             const d = modal.data;
             if (t === 'student') return `
+                <div class="flex items-center gap-4 mb-3">
+                    <div id="s_photo_preview" class="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-indigo-400 transition" onclick="document.getElementById('s_photo_input').click()">
+                        ${d?.photo ? `<img src="${escapeHtml(d.photo)}" class="w-full h-full object-cover">` : '<i class="fas fa-camera text-gray-400 text-xl"></i>'}
+                    </div>
+                    <div class="text-xs text-gray-400">
+                        <p class="font-medium text-gray-600 dark:text-gray-300">Student Photo</p>
+                        <p>Click to upload (optional)</p>
+                        <input type="file" id="s_photo_input" accept="image/*" class="hidden" onchange="previewStudentPhoto(this)">
+                    </div>
+                </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="text-xs font-medium text-gray-500 dark:text-gray-400 block mb-1">Full Name *</label>
@@ -3772,7 +3794,7 @@
         });
     };
     window.openModal = openModal; window.closeModal = closeModal; window.saveModal = saveModal;
-    window.openCached = openCached; window.cacheData = cacheData; window.dismissNotification = dismissNotification;
+    window.openCached = openCached; window.cacheData = cacheData; window.dismissNotification = dismissNotification; window.previewStudentPhoto = previewStudentPhoto;
     function deleteFee(id) { deleteEntity('fee', id); }
     function deleteBus(id) { deleteEntity('bus', id); }
     window.deleteEntity = deleteEntity; window.markAttendance = markAttendance; window.payFee = payFee; window.deleteFee = deleteFee; window.deleteBus = deleteBus;
