@@ -56,6 +56,19 @@
         @media print {
             .no-print { display: none !important; }
             .receipt-print { margin: 0; padding: 1rem; }
+            body { background: white !important; color: black !important; }
+            .dark body, .dark * { background: white !important; color: black !important; }
+            .bg-white, .dark .bg-white, .dark\\:bg-gray-800, .dark .dark\\:bg-gray-800 { background: white !important; }
+            table { page-break-inside: auto; }
+            tr { page-break-inside: avoid; page-break-after: auto; }
+            thead { display: table-header-group; }
+            .print\\:shadow-none { box-shadow: none !important; }
+            .print\\:border { border: 1px solid #ddd !important; }
+            .print\\:border-none { border: none !important; }
+            .print\\:bg-indigo-600 { background: #4f46e5 !important; }
+            .print\\:bg-emerald-600 { background: #059669 !important; }
+            .print\\:bg-amber-600 { background: #d97706 !important; }
+            .print\\:bg-purple-600 { background: #7c3aed !important; }
         }
         .pagination-btn { min-width: 36px; text-align: center; }
         .table-container { min-height: 300px; }
@@ -701,6 +714,8 @@
     let filters = { studentSearch: '', teacherSearch: '', staffSearch: '', expenseSearch: '', attendanceClass: 'all', attendanceSearch: '', examClass: 'all', examSearch: '', feeClass: 'all', feeSearch: '', classStudentSearch: '' };
     let pagination = { students: 1, teachers: 1, fees: 1, examsList: 1, staff: 1, expenses: 1 };
     let selectedClassId = null;
+    let reportType = '';
+    let selectedStudentId = null;
     let chartInstances = [];
     const FEE_TYPES = [
         { key: 'tuition', label: 'Tuition Fee', icon: 'fa-graduation-cap' },
@@ -1270,6 +1285,7 @@
             { id: 'staff', label: 'Staff', icon: 'users-cog', show: isAdmin },
             { id: 'expenses', label: 'Expenses', icon: 'wallet', show: isAdmin },
             { id: 'buses', label: 'Buses', icon: 'bus', show: isAdmin },
+            { id: 'reports', label: 'Reports', icon: 'chart-pie', show: isAdmin },
             { id: 'settings', label: 'Settings', icon: 'cog', show: isAdmin }
         ].filter(i => i.show);
 
@@ -1648,6 +1664,9 @@
                                         <div class="flex items-center justify-end gap-1">
                                             <button data-cid="${cacheData(s)}" onclick="openCached('student', this)" class="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition" title="Edit Student">
                                                 <i class="fas fa-edit text-xs"></i>
+                                            </button>
+                                            <button onclick="selectedStudentId=${s.id};setActiveTab('studentDetail')" class="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition" title="View Details">
+                                                <i class="fas fa-eye text-xs"></i>
                                             </button>
                                             <button onclick="deleteEntity('student', ${s.id})" class="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition" title="Delete Student">
                                                 <i class="fas fa-trash text-xs"></i>
@@ -3359,6 +3378,556 @@
                     </div>
                 </div>`;
         }
+                </div>`;
+        }
+        else if (activeTab === 'reports' && isAdmin) {
+            const printBtn = '<button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm transition shadow-sm flex items-center gap-2"><i class="fas fa-print text-xs"></i> Print Report</button>';
+            const backBtn = '<button onclick="reportType=\'\';render()" class="border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 px-4 py-2.5 rounded-lg text-sm transition flex items-center gap-2"><i class="fas fa-arrow-left text-xs"></i> Back to Reports</button>';
+
+            if (!reportType) {
+                const reportCards = [
+                    { id:'students', icon:'fa-user-graduate', title:'Students Report', desc:'Complete directory with contact details, class assignments, and enrollment status', color:'from-indigo-500 to-indigo-700', count:students.length, label:'students' },
+                    { id:'teachers', icon:'fa-chalkboard-user', title:'Teachers Report', desc:'Faculty roster with subjects, qualifications, salary, and contact information', color:'from-emerald-500 to-emerald-700', count:teachers.length, label:'teachers' },
+                    { id:'classes', icon:'fa-building', title:'Classes Report', desc:'Class-wise breakdown with student strength, sections, and class teachers', color:'from-amber-500 to-amber-700', count:classes.length, label:'classes' },
+                    { id:'buses', icon:'fa-bus', title:'Buses Report', desc:'Fleet information with routes, drivers, capacity, and student assignments', color:'from-sky-500 to-sky-700', count:buses.length, label:'buses' },
+                    { id:'attendance', icon:'fa-calendar-check', title:'Attendance Report', desc:'Daily and monthly attendance records with percentage summaries', color:'from-purple-500 to-purple-700', count:0, label:'records' }
+                ];
+                content = `
+                    <div class="max-w-5xl mx-auto space-y-6">
+                        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+                            <div class="flex items-center gap-3 mb-2">
+                                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-sm">
+                                    <i class="fas fa-chart-pie"></i>
+                                </div>
+                                <div>
+                                    <h2 class="text-xl font-bold dark:text-white">Reports Center</h2>
+                                    <p class="text-sm text-gray-500">Select a report type to generate detailed analytics</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                            ${reportCards.map(r => `
+                            <button onclick="reportType='${r.id}';render()" class="group text-left bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                                <div class="flex items-start gap-4">
+                                    <div class="w-14 h-14 rounded-xl bg-gradient-to-br ${r.color} flex items-center justify-center text-white text-xl shadow-lg flex-shrink-0 group-hover:scale-110 transition-transform">
+                                        <i class="fas ${r.icon}"></i>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <h3 class="font-bold text-base dark:text-white">${r.title}</h3>
+                                        <p class="text-sm text-gray-500 mt-1 leading-relaxed">${r.desc}</p>
+                                        <div class="mt-3 flex items-center gap-2">
+                                            <span class="text-2xl font-bold dark:text-white">${r.count}</span>
+                                            <span class="text-xs text-gray-400">${r.label}</span>
+                                        </div>
+                                    </div>
+                                    <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 group-hover:text-indigo-500 transition-colors mt-4"></i>
+                                </div>
+                            </button>`).join('')}
+                        </div>
+                    </div>`;
+            } else if (reportType === 'students') {
+                const reportStudents = filteredStudents;
+                const activeCount = reportStudents.filter(s => s.status === 'active').length;
+                const inactiveCount = reportStudents.length - activeCount;
+                const classDistribution = {};
+                classes.forEach(c => { classDistribution[c.name + ' ' + c.section] = students.filter(s => s.classId === c.id).length; });
+                content = `
+                    <div class="max-w-6xl mx-auto space-y-4">
+                        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 print:shadow-none print:border-none">
+                            <div class="flex flex-wrap justify-between items-start gap-3">
+                                <div>
+                                    <div class="flex items-center gap-2 text-indigo-600 text-sm font-medium mb-1"><i class="fas fa-user-graduate"></i> STUDENT REPORT</div>
+                                    <h2 class="text-2xl font-bold dark:text-white">${escapeHtml(settings.schoolName)}</h2>
+                                    <p class="text-sm text-gray-500">Student Directory · ${escapeHtml(settings.academicYear)} · Generated ${new Date().toLocaleDateString()}</p>
+                                </div>
+                                <div class="flex gap-2 no-print">${backBtn}${printBtn}</div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl p-5 text-white shadow-lg print:bg-indigo-600">
+                                <p class="text-indigo-200 text-xs font-medium uppercase tracking-wider">Total Students</p>
+                                <p class="text-3xl font-bold mt-1">${reportStudents.length}</p>
+                            </div>
+                            <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl p-5 text-white shadow-lg print:bg-emerald-600">
+                                <p class="text-emerald-200 text-xs font-medium uppercase tracking-wider">Active</p>
+                                <p class="text-3xl font-bold mt-1">${activeCount}</p>
+                                <p class="text-emerald-200 text-xs mt-1">${reportStudents.length ? Math.round(activeCount/reportStudents.length*100) : 0}%</p>
+                            </div>
+                            <div class="bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl p-5 text-white shadow-lg print:bg-amber-600">
+                                <p class="text-amber-200 text-xs font-medium uppercase tracking-wider">Inactive</p>
+                                <p class="text-3xl font-bold mt-1">${inactiveCount}</p>
+                            </div>
+                            <div class="bg-gradient-to-br from-purple-500 to-purple-700 rounded-xl p-5 text-white shadow-lg print:bg-purple-600">
+                                <p class="text-purple-200 text-xs font-medium uppercase tracking-wider">Classes</p>
+                                <p class="text-3xl font-bold mt-1">${classes.length}</p>
+                            </div>
+                        </div>
+                        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 print:shadow-none print:border">
+                            <div class="flex flex-wrap items-center gap-2 mb-4">
+                                <h3 class="font-bold text-base dark:text-white">Student List</h3>
+                                <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">${reportStudents.length} enrolled</span>
+                            </div>
+                            <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700 print:border-gray-300">
+                                <table class="w-full text-sm">
+                                    <thead>
+                                        <tr class="bg-gray-50 dark:bg-gray-700/50 print:bg-gray-100">
+                                            <th class="p-2.5 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Name</th>
+                                            <th class="p-2.5 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Roll No</th>
+                                            <th class="p-2.5 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Class</th>
+                                            <th class="p-2.5 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Parent</th>
+                                            <th class="p-2.5 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Phone</th>
+                                            <th class="p-2.5 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700 print:divide-gray-300">${reportStudents.map(s => {
+                                        const cls = classes.find(c => c.id === s.classId);
+                                        return `<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                                            <td class="p-2.5"><div class="flex items-center gap-2"><span class="font-medium text-gray-800 dark:text-gray-200">${escapeHtml(s.name)}</span></div></td>
+                                            <td class="p-2.5 font-mono text-xs text-gray-500">${escapeHtml(s.rollNo)}</td>
+                                            <td class="p-2.5 text-xs text-gray-600 dark:text-gray-300">${cls ? escapeHtml(cls.name + ' ' + cls.section) : '-'}</td>
+                                            <td class="p-2.5 text-xs text-gray-500">${escapeHtml(s.parentName || '-')}</td>
+                                            <td class="p-2.5 text-xs text-gray-500">${escapeHtml(s.phone || '-')}</td>
+                                            <td class="p-2.5"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${s.status === 'active' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300'}"><span class="w-1.5 h-1.5 rounded-full ${s.status === 'active' ? 'bg-emerald-500' : 'bg-red-500'}"></span>${escapeHtml(s.status)}</span></td>
+                                        </tr>`;}).join('')}</tbody>
+                                </table>
+                            </div>
+                            ${reportStudents.length === 0 ? '<div class="text-center py-12 text-gray-400"><p>No students found</p></div>' : ''}
+                        </div>
+                        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 print:shadow-none">
+                            <h3 class="font-bold text-base dark:text-white mb-3">Class Distribution</h3>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">${Object.entries(classDistribution).filter(([_,v]) => v > 0).map(([clsName, count]) =>
+                                `<div class="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 flex justify-between items-center">
+                                    <span class="text-sm font-medium dark:text-gray-200">${escapeHtml(clsName)}</span>
+                                    <span class="text-lg font-bold text-indigo-600 dark:text-indigo-400">${count}</span>
+                                </div>`
+                            ).join('')}</div>
+                        </div>
+                    </div>`;
+            } else if (reportType === 'teachers') {
+                const reportTeachers = filteredTeachers;
+                const activeT = reportTeachers.filter(t => t.status === 'active').length;
+                const totalSal = reportTeachers.reduce((s, t) => s + (t.salary || 0), 0);
+                content = `
+                    <div class="max-w-6xl mx-auto space-y-4">
+                        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 print:shadow-none print:border-none">
+                            <div class="flex flex-wrap justify-between items-start gap-3">
+                                <div>
+                                    <div class="flex items-center gap-2 text-emerald-600 text-sm font-medium mb-1"><i class="fas fa-chalkboard-user"></i> TEACHER REPORT</div>
+                                    <h2 class="text-2xl font-bold dark:text-white">${escapeHtml(settings.schoolName)}</h2>
+                                    <p class="text-sm text-gray-500">Faculty Roster · ${escapeHtml(settings.academicYear)} · Generated ${new Date().toLocaleDateString()}</p>
+                                </div>
+                                <div class="flex gap-2 no-print">${backBtn}${printBtn}</div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl p-5 text-white shadow-lg print:bg-indigo-600">
+                                <p class="text-indigo-200 text-xs font-medium uppercase tracking-wider">Total Teachers</p>
+                                <p class="text-3xl font-bold mt-1">${reportTeachers.length}</p>
+                            </div>
+                            <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl p-5 text-white shadow-lg print:bg-emerald-600">
+                                <p class="text-emerald-200 text-xs font-medium uppercase tracking-wider">Active</p>
+                                <p class="text-3xl font-bold mt-1">${activeT}</p>
+                            </div>
+                            <div class="bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl p-5 text-white shadow-lg print:bg-amber-600">
+                                <p class="text-amber-200 text-xs font-medium uppercase tracking-wider">Avg Salary</p>
+                                <p class="text-3xl font-bold mt-1">${curSym()}${reportTeachers.length ? Math.round(totalSal/reportTeachers.length).toLocaleString() : 0}</p>
+                            </div>
+                            <div class="bg-gradient-to-br from-purple-500 to-purple-700 rounded-xl p-5 text-white shadow-lg print:bg-purple-600">
+                                <p class="text-purple-200 text-xs font-medium uppercase tracking-wider">Total Salary</p>
+                                <p class="text-3xl font-bold mt-1">${curSym()}${totalSal.toLocaleString()}</p>
+                            </div>
+                        </div>
+                        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 print:shadow-none print:border">
+                            <h3 class="font-bold text-base dark:text-white mb-4">Faculty Directory</h3>
+                            <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                                <table class="w-full text-sm">
+                                    <thead><tr class="bg-gray-50 dark:bg-gray-700/50">
+                                        <th class="p-2.5 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Name</th>
+                                        <th class="p-2.5 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Subject</th>
+                                        <th class="p-2.5 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Qualification</th>
+                                        <th class="p-2.5 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Email</th>
+                                        <th class="p-2.5 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Phone</th>
+                                        <th class="p-2.5 text-right font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Salary</th>
+                                    </tr></thead>
+                                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700">${reportTeachers.map(t => `
+                                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                                            <td class="p-2.5 font-medium text-gray-800 dark:text-gray-200">${escapeHtml(t.name)}</td>
+                                            <td class="p-2.5 text-xs text-gray-600">${escapeHtml(t.subject || '-')}</td>
+                                            <td class="p-2.5 text-xs text-gray-500">${escapeHtml(t.qualification || '-')}</td>
+                                            <td class="p-2.5 text-xs text-gray-500">${escapeHtml(t.email || '-')}</td>
+                                            <td class="p-2.5 text-xs text-gray-500">${escapeHtml(t.phone || '-')}</td>
+                                            <td class="p-2.5 text-xs text-right font-mono font-medium">${curSym()}${(t.salary || 0).toLocaleString()}</td>
+                                        </tr>`).join('')}</tbody>
+                                </table>
+                            </div>
+                            ${reportTeachers.length === 0 ? '<div class="text-center py-12 text-gray-400"><p>No teachers found</p></div>' : ''}
+                        </div>
+                    </div>`;
+            } else if (reportType === 'classes') {
+                content = `
+                    <div class="max-w-6xl mx-auto space-y-4">
+                        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 print:shadow-none print:border-none">
+                            <div class="flex flex-wrap justify-between items-start gap-3">
+                                <div>
+                                    <div class="flex items-center gap-2 text-amber-600 text-sm font-medium mb-1"><i class="fas fa-building"></i> CLASSES REPORT</div>
+                                    <h2 class="text-2xl font-bold dark:text-white">${escapeHtml(settings.schoolName)}</h2>
+                                    <p class="text-sm text-gray-500">Class Overview · ${escapeHtml(settings.academicYear)} · Generated ${new Date().toLocaleDateString()}</p>
+                                </div>
+                                <div class="flex gap-2 no-print">${backBtn}${printBtn}</div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl p-5 text-white shadow-lg">
+                                <p class="text-indigo-200 text-xs font-medium uppercase tracking-wider">Total Classes</p>
+                                <p class="text-3xl font-bold mt-1">${classes.length}</p>
+                            </div>
+                            <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl p-5 text-white shadow-lg">
+                                <p class="text-emerald-200 text-xs font-medium uppercase tracking-wider">Total Students</p>
+                                <p class="text-3xl font-bold mt-1">${students.length}</p>
+                            </div>
+                            <div class="bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl p-5 text-white shadow-lg">
+                                <p class="text-amber-200 text-xs font-medium uppercase tracking-wider">Avg Per Class</p>
+                                <p class="text-3xl font-bold mt-1">${classes.length ? Math.round(students.length/classes.length) : 0}</p>
+                            </div>
+                            <div class="bg-gradient-to-br from-purple-500 to-purple-700 rounded-xl p-5 text-white shadow-lg">
+                                <p class="text-purple-200 text-xs font-medium uppercase tracking-wider">Total Capacity</p>
+                                <p class="text-3xl font-bold mt-1">${classes.reduce((s, c) => s + (c.capacity || 0), 0)}</p>
+                            </div>
+                        </div>
+                        <div class="space-y-4">${classes.map(c => {
+                            const classStudents = students.filter(s => s.classId === c.id);
+                            const teacher = teachers.find(t => t.id === c.classTeacherId);
+                            const fillRate = c.capacity ? Math.round(classStudents.length / c.capacity * 100) : 0;
+                            return `
+                            <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 print:shadow-none print:border">
+                                <div class="flex flex-wrap justify-between items-center gap-2 mb-3">
+                                    <div>
+                                        <h3 class="font-bold text-base dark:text-white">${escapeHtml(c.name)} ${escapeHtml(c.section)}</h3>
+                                        <p class="text-xs text-gray-500">Room ${escapeHtml(c.roomNo || '-')} · ${teacher ? 'Class Teacher: ' + escapeHtml(teacher.name) : 'No teacher assigned'}</p>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        <span class="text-sm font-medium dark:text-gray-200">${classStudents.length} / ${c.capacity || '—'}</span>
+                                        <div class="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                            <div class="h-full rounded-full ${fillRate > 80 ? 'bg-emerald-500' : fillRate > 50 ? 'bg-amber-500' : 'bg-indigo-500'}" style="width:${Math.min(fillRate,100)}%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <table class="w-full text-sm">
+                                        <thead><tr class="bg-gray-50 dark:bg-gray-700/50">
+                                            <th class="p-2 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Student</th>
+                                            <th class="p-2 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Roll No</th>
+                                            <th class="p-2 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Parent</th>
+                                            <th class="p-2 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Status</th>
+                                        </tr></thead>
+                                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">${classStudents.map(s => `
+                                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                                                <td class="p-2"><span class="font-medium text-gray-800 dark:text-gray-200">${escapeHtml(s.name)}</span></td>
+                                                <td class="p-2 text-xs text-gray-500 font-mono">${escapeHtml(s.rollNo)}</td>
+                                                <td class="p-2 text-xs text-gray-500">${escapeHtml(s.parentName || '-')}</td>
+                                                <td class="p-2"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${s.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}"><span class="w-1.5 h-1.5 rounded-full ${s.status === 'active' ? 'bg-emerald-500' : 'bg-red-500'}"></span>${escapeHtml(s.status)}</span></td>
+                                            </tr>`).join('')}</tbody>
+                                    </table>
+                                    ${classStudents.length === 0 ? '<div class="text-center py-6 text-gray-400 text-sm">No students enrolled</div>' : ''}
+                                </div>
+                            </div>`;}).join('')}
+                        </div>
+                    </div>`;
+            } else if (reportType === 'buses') {
+                content = `
+                    <div class="max-w-6xl mx-auto space-y-4">
+                        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 print:shadow-none print:border-none">
+                            <div class="flex flex-wrap justify-between items-start gap-3">
+                                <div>
+                                    <div class="flex items-center gap-2 text-sky-600 text-sm font-medium mb-1"><i class="fas fa-bus"></i> BUS FLEET REPORT</div>
+                                    <h2 class="text-2xl font-bold dark:text-white">${escapeHtml(settings.schoolName)}</h2>
+                                    <p class="text-sm text-gray-500">Transport Management · Generated ${new Date().toLocaleDateString()}</p>
+                                </div>
+                                <div class="flex gap-2 no-print">${backBtn}${printBtn}</div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl p-5 text-white shadow-lg">
+                                <p class="text-indigo-200 text-xs font-medium uppercase tracking-wider">Total Buses</p>
+                                <p class="text-3xl font-bold mt-1">${buses.length}</p>
+                            </div>
+                            <div class="bg-gradient-to-br from-sky-500 to-sky-700 rounded-xl p-5 text-white shadow-lg">
+                                <p class="text-sky-200 text-xs font-medium uppercase tracking-wider">Total Capacity</p>
+                                <p class="text-3xl font-bold mt-1">${buses.reduce((s, b) => s + (b.capacity || 0), 0)}</p>
+                            </div>
+                            <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl p-5 text-white shadow-lg">
+                                <p class="text-emerald-200 text-xs font-medium uppercase tracking-wider">Students Using Bus</p>
+                                <p class="text-3xl font-bold mt-1">${students.filter(s => s.busId).length}</p>
+                            </div>
+                            <div class="bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl p-5 text-white shadow-lg">
+                                <p class="text-amber-200 text-xs font-medium uppercase tracking-wider">Avg Load</p>
+                                <p class="text-3xl font-bold mt-1">${buses.length ? Math.round(students.filter(s => s.busId).length / buses.length) : 0}</p>
+                            </div>
+                        </div>
+                        <div class="space-y-4">${buses.map(b => {
+                            const assignedStudents = students.filter(s => s.busId === b.id);
+                            const loadPct = b.capacity ? Math.round(assignedStudents.length / b.capacity * 100) : 0;
+                            return `
+                            <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 print:shadow-none print:border">
+                                <div class="flex flex-wrap justify-between items-center gap-2 mb-3">
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-bold text-base dark:text-white">${escapeHtml(b.busNumber)}</span>
+                                            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">${escapeHtml(b.route)}</span>
+                                        </div>
+                                        <p class="text-xs text-gray-500 mt-0.5">Driver: ${escapeHtml(b.driverName || '-')} · ${escapeHtml(b.driverPhone || '-')}</p>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        <span class="text-sm font-medium dark:text-gray-200">${assignedStudents.length} / ${b.capacity || '—'} riders</span>
+                                        <div class="w-20 h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                            <div class="h-full rounded-full ${loadPct > 80 ? 'bg-emerald-500' : loadPct > 50 ? 'bg-amber-500' : 'bg-sky-500'}" style="width:${Math.min(loadPct,100)}%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <table class="w-full text-sm">
+                                        <thead><tr class="bg-gray-50 dark:bg-gray-700/50">
+                                            <th class="p-2 text-left font-semibold text-gray-600 text-[10px] uppercase tracking-wider">Student</th>
+                                            <th class="p-2 text-left font-semibold text-gray-600 text-[10px] uppercase tracking-wider">Class</th>
+                                            <th class="p-2 text-left font-semibold text-gray-600 text-[10px] uppercase tracking-wider">Route</th>
+                                        </tr></thead>
+                                        <tbody class="divide-y divide-gray-100">${assignedStudents.map(s => {
+                                            const sc = classes.find(c => c.id === s.classId);
+                                            return `<tr class="hover:bg-gray-50">
+                                                <td class="p-2"><span class="font-medium text-gray-800">${escapeHtml(s.name)}</span></td>
+                                                <td class="p-2 text-xs text-gray-500">${sc ? escapeHtml(sc.name + ' ' + sc.section) : '-'}</td>
+                                                <td class="p-2 text-xs text-gray-500">${escapeHtml(b.route)}</td>
+                                            </tr>`;}).join('')}
+                                            ${assignedStudents.length === 0 ? '<tr><td colspan="3" class="p-4 text-center text-gray-400 text-sm">No students assigned to this bus</td></tr>' : ''}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>`;}).join('')}
+                            ${buses.length === 0 ? '<div class="text-center py-12 text-gray-400"><p>No buses in the fleet</p></div>' : ''}
+                        </div>
+                    </div>`;
+            } else if (reportType === 'attendance') {
+                const attendanceRecords = api.getAttendance();
+                const totalPresent = attendanceRecords.filter(a => a.status === 'present').length;
+                const totalAbsent = attendanceRecords.filter(a => a.status === 'absent').length;
+                const totalLate = attendanceRecords.filter(a => a.status === 'late').length;
+                const totalAttn = attendanceRecords.length;
+                const attnRate = totalAttn ? Math.round(totalPresent / totalAttn * 100) : 0;
+                const recentDates = [...new Set(attendanceRecords.map(a => a.date))].sort().reverse().slice(0, 30);
+                content = `
+                    <div class="max-w-6xl mx-auto space-y-4">
+                        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 print:shadow-none print:border-none">
+                            <div class="flex flex-wrap justify-between items-start gap-3">
+                                <div>
+                                    <div class="flex items-center gap-2 text-purple-600 text-sm font-medium mb-1"><i class="fas fa-calendar-check"></i> ATTENDANCE REPORT</div>
+                                    <h2 class="text-2xl font-bold dark:text-white">${escapeHtml(settings.schoolName)}</h2>
+                                    <p class="text-sm text-gray-500">Attendance Summary · Generated ${new Date().toLocaleDateString()}</p>
+                                </div>
+                                <div class="flex gap-2 no-print">${backBtn}${printBtn}</div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl p-5 text-white shadow-lg">
+                                <p class="text-indigo-200 text-xs font-medium uppercase tracking-wider">Total Records</p>
+                                <p class="text-3xl font-bold mt-1">${totalAttn}</p>
+                            </div>
+                            <div class="bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl p-5 text-white shadow-lg">
+                                <p class="text-emerald-200 text-xs font-medium uppercase tracking-wider">Present</p>
+                                <p class="text-3xl font-bold mt-1">${totalPresent}</p>
+                                <p class="text-emerald-200 text-xs mt-1">${attnRate}% rate</p>
+                            </div>
+                            <div class="bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl p-5 text-white shadow-lg">
+                                <p class="text-amber-200 text-xs font-medium uppercase tracking-wider">Absent</p>
+                                <p class="text-3xl font-bold mt-1">${totalAbsent}</p>
+                            </div>
+                            <div class="bg-gradient-to-br from-rose-500 to-rose-700 rounded-xl p-5 text-white shadow-lg">
+                                <p class="text-rose-200 text-xs font-medium uppercase tracking-wider">Late</p>
+                                <p class="text-3xl font-bold mt-1">${totalLate}</p>
+                            </div>
+                        </div>
+                        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 print:shadow-none print:border">
+                            <h3 class="font-bold text-base dark:text-white mb-4">Attendance Log (Recent Days)</h3>
+                            <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                                <table class="w-full text-sm">
+                                    <thead><tr class="bg-gray-50 dark:bg-gray-700/50">
+                                        <th class="p-2.5 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Date</th>
+                                        <th class="p-2.5 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Student</th>
+                                        <th class="p-2.5 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Class</th>
+                                        <th class="p-2.5 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase tracking-wider">Status</th>
+                                    </tr></thead>
+                                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700">${attendanceRecords.sort((a,b) => b.date.localeCompare(a.date)).slice(0, 100).map(a => {
+                                        const st = students.find(s => s.id === a.studentId);
+                                        const sc = classes.find(c => c.id === (st ? st.classId : a.classId));
+                                        const statusColors = { present: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300', absent: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300', late: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' };
+                                        return `<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                                            <td class="p-2.5 text-xs font-mono font-medium text-gray-600 dark:text-gray-300">${escapeHtml(a.date)}</td>
+                                            <td class="p-2.5 text-sm font-medium text-gray-800 dark:text-gray-200">${st ? escapeHtml(st.name) : 'Unknown'}</td>
+                                            <td class="p-2.5 text-xs text-gray-500">${sc ? escapeHtml(sc.name + ' ' + sc.section) : '-'}</td>
+                                            <td class="p-2.5"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[a.status] || 'bg-gray-50 text-gray-700'}"><span class="w-1.5 h-1.5 rounded-full ${a.status === 'present' ? 'bg-emerald-500' : a.status === 'absent' ? 'bg-red-500' : 'bg-amber-500'}"></span>${escapeHtml(a.status)}</span></td>
+                                        </tr>`;}).join('')}</tbody>
+                                </table>
+                            </div>
+                            ${attendanceRecords.length === 0 ? '<div class="text-center py-12 text-gray-400"><p>No attendance records found</p></div>' : ''}
+                        </div>
+                    </div>`;
+            }
+        }
+        else if (activeTab === 'studentDetail') {
+            const student = students.find(s => s.id === selectedStudentId);
+            if (!student) {
+                content = `<div class="text-center py-16 text-gray-400"><i class="fas fa-exclamation-triangle text-5xl mb-4"></i><p class="text-lg font-medium">Student not found</p><button onclick="setActiveTab('students')" class="mt-4 text-indigo-600 hover:underline">Back to Students</button></div>`;
+            } else {
+                const cls = classes.find(c => c.id === student.classId);
+                const studentName = cls ? escapeHtml(cls.name + ' ' + cls.section) : '-';
+                const studentFees = fees.filter(f => f.studentId === student.id);
+                const totalFeeAmt = studentFees.reduce((s, f) => s + (f.totalAmount || 0), 0);
+                const totalPaid = studentFees.reduce((s, f) => s + (f.paidAmount || 0), 0);
+                const feeStatus = totalFeeAmt === 0 ? 'No Fees' : totalPaid >= totalFeeAmt ? 'Paid' : 'Partial';
+                const studentAttn = attendance.filter(a => a.studentId === student.id);
+                const attnPresent = studentAttn.filter(a => a.status === 'present').length;
+                const attnRate = studentAttn.length ? Math.round(attnPresent / studentAttn.length * 100) : 0;
+                const studentResults = results.filter(r => r.studentId === student.id);
+
+                content = `
+                    <div class="max-w-5xl mx-auto space-y-5">
+                        <div class="flex items-center gap-3 no-print mb-2">
+                            <button onclick="setActiveTab('students')" class="border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 px-4 py-2 rounded-lg text-sm transition flex items-center gap-2">
+                                <i class="fas fa-arrow-left text-xs"></i> Back to Students
+                            </button>
+                            <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition flex items-center gap-2">
+                                <i class="fas fa-print text-xs"></i> Print
+                            </button>
+                        </div>
+
+                        <!-- Profile Card -->
+                        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden print:shadow-none">
+                            <div class="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 p-6 md:p-8 text-white">
+                                <div class="flex flex-wrap items-center gap-5">
+                                    ${renderAvatar(student, 'w-20 h-20 md:w-24 md:h-24', 'ring-4 ring-white/20 shadow-xl')}
+                                    <div class="flex-1 min-w-0">
+                                        <h1 class="text-2xl md:text-3xl font-bold">${escapeHtml(student.name)}</h1>
+                                        <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-indigo-200 text-sm">
+                                            <span><i class="fas fa-hashtag mr-1"></i>${escapeHtml(student.rollNo)}</span>
+                                            <span><i class="fas fa-building mr-1"></i>${studentName}</span>
+                                            <span><i class="fas fa-calendar mr-1"></i>Joined ${escapeHtml(student.joinDate || '-')}</span>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-white/20 backdrop-blur-sm text-white border border-white/20">
+                                            <span class="w-2 h-2 rounded-full ${student.status === 'active' ? 'bg-emerald-400' : 'bg-red-400'}"></span>
+                                            ${escapeHtml(student.status || 'active')}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-0 divide-y md:divide-y-0 md:divide-x divide-gray-100 dark:divide-gray-700">
+                                <div class="p-5">
+                                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Contact Info</p>
+                                    <div class="space-y-2 text-sm">
+                                        <div class="flex items-center gap-2"><i class="fas fa-envelope text-gray-400 w-4"></i><span class="dark:text-gray-200">${escapeHtml(student.email || '-')}</span></div>
+                                        <div class="flex items-center gap-2"><i class="fas fa-phone text-gray-400 w-4"></i><span class="dark:text-gray-200">${escapeHtml(student.phone || '-')}</span></div>
+                                        <div class="flex items-center gap-2"><i class="fas fa-map-marker-alt text-gray-400 w-4"></i><span class="dark:text-gray-200">${escapeHtml(student.address || '-')}</span></div>
+                                    </div>
+                                </div>
+                                <div class="p-5">
+                                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Parent Info</p>
+                                    <div class="space-y-2 text-sm">
+                                        <div class="flex items-center gap-2"><i class="fas fa-user text-gray-400 w-4"></i><span class="dark:text-gray-200">${escapeHtml(student.parentName || '-')}</span></div>
+                                        <div class="flex items-center gap-2"><i class="fas fa-phone text-gray-400 w-4"></i><span class="dark:text-gray-200">${escapeHtml(student.parentPhone || '-')}</span></div>
+                                        ${student.busId ? `<div class="flex items-center gap-2"><i class="fas fa-bus text-gray-400 w-4"></i><span class="dark:text-gray-200">Bus: ${escapeHtml(buses.find(b => b.id === student.busId)?.busNumber || '')}</span></div>` : ''}
+                                    </div>
+                                </div>
+                                <div class="p-5">
+                                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Quick Stats</p>
+                                    <div class="grid grid-cols-2 gap-3 text-center">
+                                        <div class="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3">
+                                            <p class="text-2xl font-bold text-indigo-600 dark:text-indigo-400">${studentFees.length}</p>
+                                            <p class="text-xs text-gray-500">Fee Records</p>
+                                        </div>
+                                        <div class="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-3">
+                                            <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">${attnRate}%</p>
+                                            <p class="text-xs text-gray-500">Attendance</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                            <!-- Fees -->
+                            <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 print:shadow-none print:border">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="font-bold dark:text-white"><i class="fas fa-credit-card text-indigo-500 mr-2"></i>Fee Records</h3>
+                                    <span class="px-2.5 py-1 rounded-full text-xs font-medium ${feeStatus === 'Paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'}">${curSym()}${totalPaid.toLocaleString()} / ${curSym()}${totalFeeAmt.toLocaleString()}</span>
+                                </div>
+                                ${studentFees.length === 0 ? '<p class="text-sm text-gray-400 text-center py-6">No fee records</p>' : `
+                                <div class="space-y-2">${studentFees.slice(0, 10).map(f => {
+                                    const remaining = f.totalAmount - f.paidAmount;
+                                    const statusBadge = f.status === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : f.status === 'overdue' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300';
+                                    return `
+                                    <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
+                                        <div>
+                                            <p class="text-sm font-medium dark:text-gray-200">Due: ${escapeHtml(f.dueDate || '-')}</p>
+                                            <p class="text-xs text-gray-500">${curSym()}${f.totalAmount.toLocaleString()} total · ${curSym()}${f.paidAmount.toLocaleString()} paid</p>
+                                        </div>
+                                        <span class="px-2 py-0.5 rounded-full text-xs font-medium ${statusBadge}">${escapeHtml(f.status)}</span>
+                                    </div>`;}).join('')}</div>`}
+                            </div>
+
+                            <!-- Attendance -->
+                            <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 print:shadow-none print:border">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="font-bold dark:text-white"><i class="fas fa-calendar-check text-emerald-500 mr-2"></i>Attendance</h3>
+                                    <span class="text-sm font-medium ${attnRate >= 75 ? 'text-emerald-600' : 'text-amber-600'}">${attnRate}% rate</span>
+                                </div>
+                                ${studentAttn.length === 0 ? '<p class="text-sm text-gray-400 text-center py-6">No attendance records</p>' : `
+                                <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <table class="w-full text-sm">
+                                        <thead><tr class="bg-gray-50 dark:bg-gray-700/50">
+                                            <th class="p-2 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase">Date</th>
+                                            <th class="p-2 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase">Status</th>
+                                        </tr></thead>
+                                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">${studentAttn.sort((a,b) => b.date.localeCompare(a.date)).slice(0, 20).map(a => `
+                                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                                                <td class="p-2 text-xs font-mono text-gray-600 dark:text-gray-300">${escapeHtml(a.date)}</td>
+                                                <td class="p-2"><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${a.status === 'present' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : a.status === 'late' ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300'}"><span class="w-1.5 h-1.5 rounded-full ${a.status === 'present' ? 'bg-emerald-500' : a.status === 'late' ? 'bg-amber-500' : 'bg-red-500'}"></span>${escapeHtml(a.status)}</span></td>
+                                            </tr>`).join('')}</tbody>
+                                    </table>
+                                </div>`}
+                            </div>
+                        </div>
+
+                        <!-- Exam Results -->
+                        <div class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 print:shadow-none print:border">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="font-bold dark:text-white"><i class="fas fa-file-alt text-purple-500 mr-2"></i>Exam Results</h3>
+                                <span class="text-sm text-gray-500">${studentResults.length} entries</span>
+                            </div>
+                            ${studentResults.length === 0 ? '<p class="text-sm text-gray-400 text-center py-6">No exam results recorded</p>' : `
+                            <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                                <table class="w-full text-sm">
+                                    <thead><tr class="bg-gray-50 dark:bg-gray-700/50">
+                                        <th class="p-2.5 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase">Exam</th>
+                                        <th class="p-2.5 text-left font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase">Subject</th>
+                                        <th class="p-2.5 text-right font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase">Marks</th>
+                                        <th class="p-2.5 text-center font-semibold text-gray-600 dark:text-gray-300 text-[10px] uppercase">Grade</th>
+                                    </tr></thead>
+                                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700">${studentResults.map(r => {
+                                        const exam = exams.find(e => e.id === r.examId);
+                                        const subject = db.subjects.find(sub => sub.id === r.subjectId);
+                                        const gradeColors = { 'A+': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300', 'A': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300', 'B+': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300', 'B': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300', 'C': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300', 'D': 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' };
+                                        return `<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                                            <td class="p-2.5 text-sm dark:text-gray-200">${exam ? escapeHtml(exam.name) : '-'}</td>
+                                            <td class="p-2.5 text-xs text-gray-500">${subject ? escapeHtml(subject.name) : '-'}</td>
+                                            <td class="p-2.5 text-xs text-right font-mono font-medium">${r.marksObtained} / ${subject ? subject.maxMarks : 100}</td>
+                                            <td class="p-2.5 text-center"><span class="px-2 py-0.5 rounded-full text-xs font-bold ${gradeColors[r.grade] || 'bg-gray-100 text-gray-700'}">${r.grade || '-'}</span></td>
+                                        </tr>`;}).join('')}</tbody>
+                                </table>
+                            </div>`}
+                        </div>
+                    </div>`;
+            }
+        }
         else if (activeTab === 'settings' && isAdmin) {
             content = `
                 <div class="max-w-3xl mx-auto space-y-6">
@@ -4192,7 +4761,7 @@
         }, 0);
     }
 
-    window.setActiveTab = (tab) => { activeTab = tab; selectedClassId = null; sidebarOpen = false; render(); };
+    window.setActiveTab = (tab) => { activeTab = tab; selectedClassId = null; reportType = ''; selectedStudentId = null; sidebarOpen = false; render(); };
     window.toggleSidebar = () => { sidebarOpen = !sidebarOpen; render(); };
     window.createUser = () => {
         try {
